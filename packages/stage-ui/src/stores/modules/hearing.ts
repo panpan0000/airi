@@ -201,7 +201,28 @@ export const useHearingStore = defineStore('hearing-store', () => {
     const features = providersStore.getTranscriptionFeatures(providerId)
     const streamExecutor = resolveStreamTranscriptionExecutor(providerId)
 
-    const { trackSttStarted, trackSttSucceeded, trackSttFailed } = useAnalytics()
+    // NOTICE: `useAnalytics()` transitively calls `useI18n()`, which reads
+    // `inject()` against the current Vue setup context. Pinia setup stores do
+    // not propagate that context across store-boundary calls, so the `inject()`
+    // inside `useI18n()` throws when transcription is invoked from outside a
+    // component (e.g. from another store's action). Fall back to no-op
+    // trackers — analytics is observability, not a control-flow signal, so a
+    // missing telemetry event must never abort transcription.
+    //
+    // Remove this guard once `useAnalytics` no longer depends on `useI18n`,
+    // or once the active Vue setup context is preserved across store calls.
+    let trackSttStarted: (provider: string) => void = () => {}
+    let trackSttSucceeded: (properties: { provider: string, latency_ms: number, char_count: number, stream: boolean }) => void = () => {}
+    let trackSttFailed: (properties: { provider: string, error_code?: string }) => void = () => {}
+    try {
+      const analytics = useAnalytics()
+      trackSttStarted = analytics.trackSttStarted
+      trackSttSucceeded = analytics.trackSttSucceeded
+      trackSttFailed = analytics.trackSttFailed
+    }
+    catch (analyticsErr) {
+      console.warn('[hearing] useAnalytics unavailable in store-action context, skipping telemetry:', analyticsErr)
+    }
     const sttStartedAt = performance.now()
     trackSttStarted(providerId)
 
@@ -525,7 +546,7 @@ export const useHearingSpeechInputPipeline = defineStore('modules:hearing:speech
           return
 
         error.value = errorMessage(err)
-        console.error('Error generating transcription:', error.value)
+        console.error('Error generating transcription:', error.value, err)
       }
     }
 
@@ -860,7 +881,7 @@ export const useHearingSpeechInputPipeline = defineStore('modules:hearing:speech
         return
 
       error.value = errorMessage(err)
-      console.error('Error generating transcription:', error.value)
+      console.error('Error generating transcription:', error.value, err)
     }
   }
 
@@ -897,7 +918,7 @@ export const useHearingSpeechInputPipeline = defineStore('modules:hearing:speech
     }
     catch (err) {
       error.value = errorMessage(err)
-      console.error('Error generating transcription:', error.value)
+      console.error('Error generating transcription:', error.value, err)
     }
   }
 
