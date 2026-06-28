@@ -1,6 +1,9 @@
 import type { Plugin } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 
+// NOTICE: must be the first import — seeds localStorage before any Pinia store reads it.
+import './dev-bootstrap'
+
 import Tres from '@tresjs/core'
 
 import { autoAnimatePlugin } from '@formkit/auto-animate/vue'
