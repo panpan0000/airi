@@ -98,16 +98,33 @@ export async function setupMainWindow(params: {
   })
 
   // Bypass CORS for dev mode: the renderer loads from localhost:5173 but
-  // makes fetch requests to self-hosted LLM backends that don't return CORS headers.
-  // Only add CORS headers when the server did NOT return them, to avoid duplicate headers.
-  // Also strip the Origin header since some self-hosted backends reject requests with it.
+  // makes fetch requests to self-hosted LLM backends that don't return CORS
+  // headers and may reject requests that carry an Origin header.
+  // Only intercept the chat provider's host to avoid slowing down other
+  // services (speech, transcription, etc.) that handle CORS on their own.
   if (is.dev) {
+    const CHAT_HOST = '10.6.15.102:31972'
+
+    const isChatEndpoint = (url: string) => {
+      try {
+        return new URL(url).host === CHAT_HOST
+      }
+      catch { return false }
+    }
+
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-      delete details.requestHeaders['Origin']
-      delete details.requestHeaders['origin']
+      if (isChatEndpoint(details.url)) {
+        delete details.requestHeaders['Origin']
+        delete details.requestHeaders['origin']
+      }
       callback({ requestHeaders: details.requestHeaders })
     })
+
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      if (!isChatEndpoint(details.url)) {
+        callback({ responseHeaders: details.responseHeaders })
+        return
+      }
       const headers = { ...details.responseHeaders }
       if (!headers['access-control-allow-origin']) {
         headers['Access-Control-Allow-Origin'] = ['*']
