@@ -23,7 +23,7 @@ import { defineInvokeHandler } from '@moeru/eventa'
 import { createContext } from '@moeru/eventa/adapters/electron/main'
 import { initScreenCaptureForWindow } from '@proj-airi/electron-screen-capture/main'
 import { defu } from 'defu'
-import { BrowserWindow, ipcMain, shell } from 'electron'
+import { BrowserWindow, ipcMain, session, shell } from 'electron'
 import { isLinux, isMacOS } from 'std-env'
 import { array, number, object, optional, string } from 'valibot'
 
@@ -96,6 +96,32 @@ export async function setupMainWindow(params: {
     type: 'panel',
     ...transparentWindowConfig(),
   })
+
+  // Bypass CORS for dev mode: the renderer loads from localhost:5173 but
+  // makes fetch requests to self-hosted LLM backends that don't return CORS headers.
+  // Only add CORS headers when the server did NOT return them, to avoid duplicate headers.
+  // Also strip the Origin header since some self-hosted backends reject requests with it.
+  if (is.dev) {
+    session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+      delete details.requestHeaders['Origin']
+      delete details.requestHeaders['origin']
+      callback({ requestHeaders: details.requestHeaders })
+    })
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const headers = { ...details.responseHeaders }
+      if (!headers['access-control-allow-origin']) {
+        headers['Access-Control-Allow-Origin'] = ['*']
+        headers['Access-Control-Allow-Methods'] = ['*']
+        headers['Access-Control-Allow-Headers'] = ['*']
+      }
+      callback({
+        responseHeaders: headers,
+        statusLine: details.method === 'OPTIONS' && !headers['access-control-allow-origin']
+          ? 'HTTP/1.1 200 OK'
+          : details.statusLine,
+      })
+    })
+  }
 
   if (params.onWindowCreated) {
     params.onWindowCreated(window)
