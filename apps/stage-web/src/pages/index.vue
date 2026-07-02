@@ -38,7 +38,7 @@ const cursorPosition = computed(() => ({
   y: mouseY.value,
 }))
 
-const openWebUIBridge = useOpenWebUIBridge({})
+const openWebUIBridge = useOpenWebUIBridge({ summarize: true })
 const owebIframeRef = useTemplateRef<HTMLIFrameElement>('owebIframe')
 watch(owebIframeRef, el => openWebUIBridge.registerIframe(el ?? null), { immediate: true })
 </script>
