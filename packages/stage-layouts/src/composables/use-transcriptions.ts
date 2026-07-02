@@ -216,6 +216,20 @@ export function useTranscriptions(options: TranscriptionOptions) {
     }
   })
 
+  watch([autoSendEnabled, hearingEnabled], async ([autoSend, enabled]) => {
+    if (toValue(isStageTamagotchi))
+      return
+    if (!autoSend || !enabled)
+      return
+    if (isListening.value)
+      return
+    try {
+      await startStreaming()
+    }
+    catch {
+    }
+  }, { immediate: true })
+
   onScopeDispose(() => {
     clearPendingAutoSend()
     stopStreaming()
